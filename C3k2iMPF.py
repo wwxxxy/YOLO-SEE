@@ -1,33 +1,27 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 class Conv(nn.Module):
-
     default_act = nn.SiLU()  # default activation
 
     def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True):
-
         super().__init__()
         self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
         self.bn = nn.BatchNorm2d(c2)
         self.act = self.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
 
     def forward(self, x):
-
         return self.act(self.bn(self.conv(x)))
 
     def forward_fuse(self, x):
-
         return self.act(self.conv(x))
 
-class Bottleneck(nn.Module):
 
+class Bottleneck(nn.Module):
     def __init__(
         self, c1: int, c2: int, shortcut: bool = True, g: int = 1, k: Tuple[int, int] = (3, 3), e: float = 0.5
     ):
-
         super().__init__()
         c_ = int(c2 * e)  # hidden channels
         self.cv1 = Conv(c1, c_, k[0], 1)
@@ -35,14 +29,11 @@ class Bottleneck(nn.Module):
         self.add = shortcut and c1 == c2
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-
         return x + self.cv2(self.cv1(x)) if self.add else self.cv2(self.cv1(x))
 
+
 class C2f(nn.Module):
-
-
     def __init__(self, c1: int, c2: int, n: int = 1, shortcut: bool = False, g: int = 1, e: float = 0.5):
-
         super().__init__()
         self.c = int(c2 * e)  # hidden channels
         self.cv1 = Conv(c1, 2 * self.c, 1, 1)
@@ -62,8 +53,9 @@ class C2f(nn.Module):
 
 
 class iRMB_MPF(nn.Module):
-    def __init__(self, in_channels, out_channels, 
-                 se_ratio=0.25, mpf_pool_sizes=[3,5,7], dw_ks=3, has_skip=True, act=True):
+    def __init__(
+        self, in_channels, out_channels, se_ratio=0.25, mpf_pool_sizes=[3, 5, 7], dw_ks=3, has_skip=True, act=True
+    ):
         super().__init__()
         self.has_skip = (in_channels == out_channels) and has_skip
 
@@ -76,7 +68,7 @@ class iRMB_MPF(nn.Module):
                     nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False),
                     nn.BatchNorm2d(out_channels),
                     self.act,
-                    nn.AvgPool2d(kernel_size=k, stride=1, padding=k//2)
+                    nn.AvgPool2d(kernel_size=k, stride=1, padding=k // 2),
                 )
             )
         # 原始特征通过 1x1 conv
@@ -84,14 +76,20 @@ class iRMB_MPF(nn.Module):
 
         # ---------- iRMB 部分 ----------
         self.norm = nn.BatchNorm2d(out_channels)
-        self.conv_local = nn.Conv2d(out_channels, out_channels, kernel_size=dw_ks, padding=dw_ks//2, groups=out_channels)
-        self.se = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            nn.Conv2d(out_channels, int(out_channels * se_ratio), 1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(int(out_channels * se_ratio), out_channels, 1),
-            nn.Sigmoid()
-        ) if se_ratio > 0 else nn.Identity()
+        self.conv_local = nn.Conv2d(
+            out_channels, out_channels, kernel_size=dw_ks, padding=dw_ks // 2, groups=out_channels
+        )
+        self.se = (
+            nn.Sequential(
+                nn.AdaptiveAvgPool2d(1),
+                nn.Conv2d(out_channels, int(out_channels * se_ratio), 1),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(int(out_channels * se_ratio), out_channels, 1),
+                nn.Sigmoid(),
+            )
+            if se_ratio > 0
+            else nn.Identity()
+        )
         self.proj = nn.Conv2d(out_channels, out_channels, kernel_size=1)
         self.drop_path = nn.Identity()
 
@@ -110,17 +108,9 @@ class iRMB_MPF(nn.Module):
         if self.has_skip:
             x = shortcut + self.drop_path(x)
         return x
-    
 
 
 class C3k2iMPF(C2f):
-
-
-    def __init__(
-        self, c1, c2, n=1, c3k=False, e=0.5, g=1, shortcut=True, se_ratio=0.25
-    ):
-
+    def __init__(self, c1, c2, n=1, c3k=False, e=0.5, g=1, shortcut=True, se_ratio=0.25):
         super().__init__(c1, c2, n, shortcut, g, e)
-        self.m = nn.ModuleList(
-            iRMB_MPF(self.c, self.c, se_ratio=se_ratio) for _ in range(n)
-        )
+        self.m = nn.ModuleList(iRMB_MPF(self.c, self.c, se_ratio=se_ratio) for _ in range(n))
