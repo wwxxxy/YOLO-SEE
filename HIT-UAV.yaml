@@ -1,0 +1,11 @@
+path: /root/autodl-fs/ultralytics11/Dateset_HIT-UAV/normal_xml
+train: images/train
+val: images/val
+test: images/test
+# class
+names:
+  0: Person
+  1: Car
+  2: Bicycle
+  3: OtherVehicle
+  4: DontCare

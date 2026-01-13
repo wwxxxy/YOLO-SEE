@@ -1,0 +1,9 @@
+path: /root/autodl-fs/ultralytics11/Dataset_TinyPerson
+train: images/train
+val: images/val
+test: images/test
+# class
+names:
+  0: earth_person
+  1: sea_person
+
